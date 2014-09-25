@@ -18,8 +18,12 @@ using namespace std;
 
 void HeapPage::Init(PageID pageNo)
 {
-	//TODO: add your code here
-
+	numOfSlots = 0;
+	nextPage = INVALID_SLOT;
+	prevPage = INVALID_SLOT;
+	pid = pageNo;
+	freePtr = 0;
+	freeSpace = HEAPPAGE_DATA_SIZE;
 }
 
 
@@ -35,8 +39,6 @@ void HeapPage::Init(PageID pageNo)
 
 Status HeapPage::InsertRecord(const char *recPtr, int length, RecordID& rid)
 {
-	//TODO: add your code here
-    
 	return DONE;
 }
 
