@@ -57,9 +57,44 @@ Status HeapPage::InsertRecord(const char *recPtr, int length, RecordID& rid)
 
 Status HeapPage::DeleteRecord(RecordID rid)
 {
-	//TODO: add your code here
+	// Ensure pid matches this page and the slot number is valid
+	if (rid.pageNo != pid || rid.slotNo > numOfSlots || rid.slotNo < 1) return FAIL;
+	
+	// Compute the pointer to the current Slot
+	Slot* delSlot = GetFirstSlotPointer() - (rid.slotNo - 1);
 
-	return FAIL;
+	// Ensure that our slot is full
+	if (SlotIsEmpty(delSlot)) return FAIL;
+
+	// Get a pointer to the record
+	char *delPtr = (char*)(data + delSlot->offset);
+
+	// Close the hole created by deleting the record & update affected slots
+	RecordID curRid = rid;
+	RecordID nextRid;
+	int baseOffset = 0;
+	while(NextRecord(curRid, nextRid) != DONE){
+		curRid = nextRid;
+		Slot* moveSlot = GetFirstSlotPointer() - (curRid.slotNo - 1);
+		char* movePtr = (char*)(data + moveSlot->offset);
+		memmove(delPtr + baseOffset, movePtr, moveSlot->length);
+		moveSlot->offset -= delSlot->length;
+		baseOffset += moveSlot->length;
+	}
+
+	// Update free space information
+	freePtr -= delSlot->length;
+	freeSpace += delSlot->length;
+
+	// Only delete the slot if it is the last one to avoid messing up the numbering
+	if (rid.slotNo == numOfSlots) {
+		numOfSlots--;
+		freeSpace += sizeof(Slot);
+	}
+
+	SetSlotEmpty(delSlot);
+
+	return OK;
 }
 
 
