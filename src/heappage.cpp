@@ -42,7 +42,31 @@ void HeapPage::Init(PageID pageNo)
 
 Status HeapPage::InsertRecord(const char *recPtr, int length, RecordID& rid)
 {
-	return DONE;
+  // Check that we have enough space available
+  if (freeSpace < length + 2 * sizeOf(short)) {
+    return DONE;
+  }
+  // Get pointer to next place in data we can write 
+  dataLoc = (char*)(data+freePtr);
+
+  // Copy record into data
+  memcopy(dataLoc,recPtr,length);
+  freePtr += length;
+
+  currSlot = 1
+  // Find an empty slot or last slot
+  while (currSlot <= NumOfSlots) {
+    // Compute pointer to current slot beign checked
+    Slot* slotToCheck = getFirstSlotPointer() - (currSlot - 1);
+    
+    if (SlotIsEmpty(slotToCheck) {
+        FillSlot(slotToCheck, dataLoc + length, length);
+        freeSpace += length; //Slot already accounted for 
+        return OK;
+    }
+    currSlot++;
+  }
+    
 }
 
 
