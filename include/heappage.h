@@ -98,7 +98,7 @@ public:
 	PageID PageNo();  
 
 private:
-	//	To retrieve a COPY of a record with ID rid from a page.
+	//	To retrieve a record with the given offset from the page.
 	Status RecordWithOffset(int offset, RecordID& nextRid);
 };
 

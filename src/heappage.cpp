@@ -102,12 +102,8 @@ Status HeapPage::DeleteRecord(RecordID rid)
 {
 	// Ensure pid matches this page and the slot number is valid
 	
-	//std::cout << "Want to delete slot number " << rid.slotNo << " of " << numOfSlots << std::endl;
-
 	if (rid.pageNo != pid || rid.slotNo > numOfSlots || rid.slotNo < 1) return FAIL;
 	
-	//std::cout << "Deleting slot number " << rid.slotNo << " of " << numOfSlots << std::endl;
-
 	// Compute the pointer to the current Slot
 	Slot* delSlot = GetFirstSlotPointer() - (rid.slotNo - 1);
 
@@ -126,8 +122,6 @@ Status HeapPage::DeleteRecord(RecordID rid)
 		curRid = nextRid;
 		Slot* moveSlot = GetFirstSlotPointer() - (curRid.slotNo - 1);
 		char* movePtr = (char*)(data + moveSlot->offset);
-		
-		//std::cout << "Closing hole @ baseOffset " << baseOffset << ". With record of length " << moveSlot->length << std::endl;
 		memmove(delPtr + baseOffset, movePtr, moveSlot->length);
 		moveSlot->offset -= delSlot->length;
 		baseOffset += moveSlot->length;
@@ -140,11 +134,8 @@ Status HeapPage::DeleteRecord(RecordID rid)
 	// Only delete the slot if it is the last one to avoid messing up the numbering
 	if (rid.slotNo == numOfSlots) {
 		numOfSlots--;
-		//std::cout << "Slot is at the end. Deleting the memory.";
 		freeSpace += sizeof(Slot);
 	}
-
-	//std::cout << "Done. There are " << numOfSlots <<  " left.";
 		
 	SetSlotEmpty(delSlot);
 
@@ -152,6 +143,14 @@ Status HeapPage::DeleteRecord(RecordID rid)
 	return OK;
 }
 
+//------------------------------------------------------------------
+// HeapPage::RecordWithOffset
+//
+// Input     : Desired offset of the record.
+// Output    : Record ID of the record with the designated offset.
+// Purpose   : Find a record with a certain offset.
+// Return    : OK if a record was found, DONE otherwise.
+//------------------------------------------------------------------
 Status HeapPage::RecordWithOffset(int offset, RecordID& nextRid)
 {
 
