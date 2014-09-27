@@ -6,6 +6,8 @@
 #include "heapfile.h"
 #include "db.h"
 
+#include <limits>
+
 using namespace std;
 
 //------------------------------------------------------------------
@@ -18,9 +20,10 @@ using namespace std;
 
 void HeapPage::Init(PageID pageNo)
 {
+	nextPage = INVALID_PAGE;
+	prevPage = INVALID_PAGE;
+	
 	numOfSlots = 0;
-	nextPage = INVALID_SLOT;
-	prevPage = INVALID_SLOT;
 	pid = pageNo;
 	freePtr = 0;
 	freeSpace = HEAPPAGE_DATA_SIZE;
@@ -71,8 +74,20 @@ Status HeapPage::DeleteRecord(RecordID rid)
 
 Status HeapPage::FirstRecord(RecordID& rid)
 {
-	//TODO: add your code here
+	//Find the slot that corresponds to the first record if it exists
+	for(int slotNumToCheck = 1; slotNumToCheck <= numOfSlots; slotNumToCheck++){
+		// Compute the pointer to the slot we will check
+		Slot* slotToCheck = GetFirstSlotPointer() - (slotNumToCheck - 1);
 
+		// Check to ensure the slot is not empty and that it's offset is 0
+		if (!SlotIsEmpty(slotToCheck) && slotToCheck->offset == 0) {
+			rid.pageNo = pid;
+			rid.slotNo = slotNumToCheck;
+			return OK;
+		}
+	}
+
+	// If we get here, there was no slot containing the first record
 	return DONE;
 }
 
@@ -89,7 +104,31 @@ Status HeapPage::FirstRecord(RecordID& rid)
 
 Status HeapPage::NextRecord(RecordID curRid, RecordID& nextRid)
 {
-	//TODO: add your code here
+
+	// Ensure pid matches this page and the slot number is valid
+	if (curRid.pageNo != pid || curRid.slotNo > numOfSlots || curRid.slotNo < 1) return FAIL;
+	
+	// Compute the pointer to the current Slot
+	Slot* curSlot = GetFirstSlotPointer() - (curRid.slotNo - 1);
+
+	// Ensure that our slot is full
+	if (SlotIsEmpty(curSlot)) return FAIL;
+
+	// Compute the offset the next record would have if it were to exist
+	int nextOffset = curSlot->offset + curSlot->length;
+
+	// Find the slot with this offset if it exists
+	for(int slotNumToCheck = 1; slotNumToCheck <= numOfSlots; slotNumToCheck++){
+		// Compute the pointer to the slot we will check
+		Slot* slotToCheck = GetFirstSlotPointer() - (slotNumToCheck - 1);
+
+		// Check to see if it is what we're looking for
+		if (!SlotIsEmpty(slotToCheck) && slotToCheck->offset == nextOffset) {
+			nextRid.pageNo = pid;
+			nextRid.slotNo = slotNumToCheck;
+			return OK;
+		}
+	}
 
 	return DONE;
 }
@@ -106,9 +145,21 @@ Status HeapPage::NextRecord(RecordID curRid, RecordID& nextRid)
 
 Status HeapPage::GetRecord(RecordID rid, char *recPtr, int& len)
 {
-	//TODO: add your code here
+	// Ensure pid matches this page and the slot number is valid
+	if (rid.pageNo != pid || rid.slotNo > numOfSlots || rid.slotNo < 1) return FAIL;
+	
+	// Compute the pointer to the current Slot
+	Slot* curSlot = GetFirstSlotPointer() - (rid.slotNo - 1);
 
-	return FAIL;
+	// Check to ensure enough memory has been allocated by the caller and that our slot is full
+	if (len < curSlot->length || SlotIsEmpty(curSlot)) return FAIL;
+
+	// Copy the record and set its length
+	char *curRecPtr = (char*)(data + curSlot->offset);
+	memcpy(recPtr,curRecPtr,curSlot->length);
+	len = curSlot->length;
+
+	return OK;
 }
 
 
@@ -123,9 +174,20 @@ Status HeapPage::GetRecord(RecordID rid, char *recPtr, int& len)
 
 Status HeapPage::ReturnRecord(RecordID rid, char*& recPtr, int& len)
 {
-	//TODO: add your code here
+	// Ensure pid matches this page and the slot number is valid
+	if (rid.pageNo != pid || rid.slotNo > numOfSlots || rid.slotNo < 1) return FAIL;
+	
+	// Compute the pointer to the current Slot
+	Slot* curSlot = GetFirstSlotPointer() - (rid.slotNo - 1);
 
-	return FAIL;
+	// Check to ensure our slot is full
+	if (SlotIsEmpty(curSlot)) return FAIL;
+
+	// Set the record pointer and its length
+	recPtr = (char*)(data + curSlot->offset);
+	len = curSlot->length;
+
+	return OK;
 }
 
 
@@ -140,9 +202,7 @@ Status HeapPage::ReturnRecord(RecordID rid, char*& recPtr, int& len)
 
 int HeapPage::AvailableSpace()
 {
-	//TODO: add your code here
-
-	return -1;
+	return std::max((int)(freeSpace - sizeof(Slot)), 0);
 }
 
 
@@ -157,9 +217,7 @@ int HeapPage::AvailableSpace()
 
 bool HeapPage::IsEmpty()
 {
-	//TODO: add your code here
-
-	return true;
+	return (numOfSlots == 0);
 }
 
 //------------------------------------------------------------------
@@ -173,8 +231,20 @@ bool HeapPage::IsEmpty()
 
 int HeapPage::GetNumOfRecords()
 {
+	int numRecords = 0;
 
-	return -1;
+	// Search through every slot counting the number of full ones
+	for(int slotNumToCheck = 1; slotNumToCheck <= numOfSlots; slotNumToCheck++){
+		// Compute the pointer to the slot we will check
+		Slot* slotToCheck = GetFirstSlotPointer() - (slotNumToCheck - 1);
+
+		// Check to see if it has data
+		if (!SlotIsEmpty(slotToCheck)) {
+			numRecords++;
+		}
+	}
+
+	return numRecords;
 }
 
 
