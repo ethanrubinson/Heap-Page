@@ -42,31 +42,50 @@ void HeapPage::Init(PageID pageNo)
 
 Status HeapPage::InsertRecord(const char *recPtr, int length, RecordID& rid)
 {
-  // Check that we have enough space available
-  if (freeSpace < length + 2 * sizeOf(short)) {
-    return DONE;
-  }
-  // Get pointer to next place in data we can write 
-  dataLoc = (char*)(data+freePtr);
 
-  // Copy record into data
-  memcopy(dataLoc,recPtr,length);
-  freePtr += length;
+	// Check to see if we have any empty slots
+	int slotNumToCheck = 1;
+	bool foundEmptySlot = false;
+	Slot* slotToCheck;
+	for(slotNumToCheck; slotNumToCheck <= numOfSlots; slotNumToCheck++){
+		// Compute the pointer to the slot we will check
+		slotToCheck = GetFirstSlotPointer() - (slotNumToCheck - 1);
 
-  currSlot = 1
-  // Find an empty slot or last slot
-  while (currSlot <= NumOfSlots) {
-    // Compute pointer to current slot beign checked
-    Slot* slotToCheck = getFirstSlotPointer() - (currSlot - 1);
-    
-    if (SlotIsEmpty(slotToCheck) {
-        FillSlot(slotToCheck, dataLoc + length, length);
-        freeSpace += length; //Slot already accounted for 
-        return OK;
-    }
-    currSlot++;
-  }
-    
+		// Check to if the slot is empty
+		if (SlotIsEmpty(slotToCheck)) {
+			foundEmptySlot = true;
+			break;
+		}
+	}
+
+	// Check to see if we have the propper amount of space to add a record and potentially a new slot
+	if (freeSpace < length + ((foundEmptySlot) ? 0 : sizeof(Slot))) return DONE;
+
+	// Set the new slot (or fill the empty one) and set the rid
+	rid.pageNo = pid;
+	Slot* newSlot;
+	if (foundEmptySlot) {
+		newSlot = slotToCheck;
+		rid.slotNo = slotNumToCheck;
+	}
+	else {
+		newSlot = GetFirstSlotPointer() - numOfSlots;
+		numOfSlots++;
+		rid.slotNo = numOfSlots;
+		freeSpace -= sizeof(Slot);
+	}
+	newSlot->length = length;
+	newSlot->offset = freePtr;
+	
+
+	// Set the new record
+	char* newRecPtr = data + newSlot->offset;
+	memcpy(newRecPtr, recPtr, length);
+
+	freePtr += length;
+	freeSpace -= length;
+
+	return OK;
 }
 
 
@@ -82,8 +101,13 @@ Status HeapPage::InsertRecord(const char *recPtr, int length, RecordID& rid)
 Status HeapPage::DeleteRecord(RecordID rid)
 {
 	// Ensure pid matches this page and the slot number is valid
+	
+	//std::cout << "Want to delete slot number " << rid.slotNo << " of " << numOfSlots << std::endl;
+
 	if (rid.pageNo != pid || rid.slotNo > numOfSlots || rid.slotNo < 1) return FAIL;
 	
+	//std::cout << "Deleting slot number " << rid.slotNo << " of " << numOfSlots << std::endl;
+
 	// Compute the pointer to the current Slot
 	Slot* delSlot = GetFirstSlotPointer() - (rid.slotNo - 1);
 
@@ -97,10 +121,13 @@ Status HeapPage::DeleteRecord(RecordID rid)
 	RecordID curRid = rid;
 	RecordID nextRid;
 	int baseOffset = 0;
-	while(NextRecord(curRid, nextRid) != DONE){
+	Status status;
+	while((status = RecordWithOffset(delSlot->offset + delSlot->length + baseOffset, nextRid)) != DONE){
 		curRid = nextRid;
 		Slot* moveSlot = GetFirstSlotPointer() - (curRid.slotNo - 1);
 		char* movePtr = (char*)(data + moveSlot->offset);
+		
+		//std::cout << "Closing hole @ baseOffset " << baseOffset << ". With record of length " << moveSlot->length << std::endl;
 		memmove(delPtr + baseOffset, movePtr, moveSlot->length);
 		moveSlot->offset -= delSlot->length;
 		baseOffset += moveSlot->length;
@@ -113,14 +140,36 @@ Status HeapPage::DeleteRecord(RecordID rid)
 	// Only delete the slot if it is the last one to avoid messing up the numbering
 	if (rid.slotNo == numOfSlots) {
 		numOfSlots--;
+		//std::cout << "Slot is at the end. Deleting the memory.";
 		freeSpace += sizeof(Slot);
 	}
 
+	//std::cout << "Done. There are " << numOfSlots <<  " left.";
+		
 	SetSlotEmpty(delSlot);
+
 
 	return OK;
 }
 
+Status HeapPage::RecordWithOffset(int offset, RecordID& nextRid)
+{
+
+	// Find the slot with the offset if it exists
+	for(int slotNumToCheck = 1; slotNumToCheck <= numOfSlots; slotNumToCheck++){
+		// Compute the pointer to the slot we will check
+		Slot* slotToCheck = GetFirstSlotPointer() - (slotNumToCheck - 1);
+
+		// Check to see if it is what we're looking for
+		if (!SlotIsEmpty(slotToCheck) && slotToCheck->offset == offset) {
+			nextRid.pageNo = pid;
+			nextRid.slotNo = slotNumToCheck;
+			return OK;
+		}
+	}
+
+	return DONE;
+}
 
 //------------------------------------------------------------------
 // HeapPage::FirstRecord
